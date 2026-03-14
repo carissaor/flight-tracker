@@ -1,21 +1,21 @@
 # ✈️ flight-tracker
 
-> Flight price monitoring and prediction 
-
----
-
 ## Overview
 
 I love travelling!! But between global conflicts, pandemics, economic shifts, and geopolitical tensions, flight prices have never been more unpredictable. **flight-tracker** pulls real-time pricing data across multiple routes and world-event signals to build up a dataset for forecasting where prices are headed.
 
+🌐 **[Live Demo](https://flight-tracker-pink.vercel.app)**
+
 ---
 
-## What It Does Right Now
+## What It Does
 
 - Fetches the cheapest available fares for 6 routes out of YVR via the Travelpayouts API
 - Pulls world-event signals from Polymarket — real money prediction markets for geopolitical events (conflicts, pandemics, oil prices, travel bans)
+- Calculates a **Global Chaos Score** (0–100) from weighted Polymarket probabilities to signal when prices are likely to spike
 - Saves each price snapshot and event probability with a timestamp so history accumulates over time
-- REST API serving price history and world-event data to a React frontend
+- REST API serving price history, world-event data, and chaos score to a React frontend
+- Collector runs every 6 hours on Railway, building up price history automatically
 
 ---
 
@@ -29,6 +29,19 @@ I love travelling!! But between global conflicts, pandemics, economic shifts, an
 | YVR | CDG — Paris |
 | YVR | JFK — New York |
 | YVR | HKG — Hong Kong |
+
+---
+
+## Global Chaos Score
+
+A single 0–100 score computed from a weighted average of all Polymarket event probabilities. Higher-volume markets carry more weight since they represent more reliable crowd signals.
+
+| Score | Level | Meaning |
+|-------|-------|---------|
+| 60+ | 😭 We are so cooked | Book ASAP and get a refundable ticket! |
+| 40+ | 🌪️ It's giving chaos | Things are getting spicy...don't wait! |
+| 20+ | 👀 Sus but manageable | Could be nothing. Could be everything. Check back soon! |
+| 0+ | ✌️ Calm skies | Weirdly calm, book before that changes! |
 
 ---
 
@@ -52,10 +65,11 @@ Each market returns a 0–1 probability representing what traders think is the l
 - [x] Route price fetching (Travelpayouts)
 - [x] PostgreSQL storage with timestamped snapshots
 - [x] World-event signals (Polymarket)
+- [x] Global Chaos Score
 - [x] REST API (Go)
-- [ ] React frontend dashboard
-- [ ] Scheduled data collection (Railway)
-- [ ] Deploy API to Railway, frontend to Vercel
+- [x] React frontend dashboard
+- [x] Scheduled data collection (Railway cron)
+- [x] Deploy API to Railway, frontend to Vercel
 - [ ] Price prediction model (Python)
 - [ ] Price alert notifications
 
@@ -65,16 +79,14 @@ Each market returns a 0–1 probability representing what traders think is the l
 
 ### Prerequisites
 
-- Go 1.21+
+- Go 1.26+
 - Node.js 18+ (for frontend)
-- PostgreSQL running locally
 - [Travelpayouts API token](https://travelpayouts.com) (free)
-- No API key needed for Polymarket
 
 ### Installation
 
 ```bash
-git clone https://github.com/your-username/flight-tracker.git
+git clone https://github.com/carissaor/flight-tracker.git
 cd flight-tracker
 go mod tidy
 ```
@@ -100,8 +112,6 @@ ORIGIN=YVR
 
 ### Run the Collector
 
-Fetches latest prices and world events, saves to DB:
-
 ```bash
 go run ./cmd/collector
 ```
@@ -114,6 +124,16 @@ go run ./cmd/api
 
 API runs on `http://localhost:8080`
 
+### Run the Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Frontend runs on `http://localhost:5173`
+
 ---
 
 ## API Endpoints
@@ -123,6 +143,7 @@ API runs on `http://localhost:8080`
 | GET | `/api/routes` | All routes with latest and lowest price |
 | GET | `/api/prices?route=YVR-LHR` | Price history for a specific route |
 | GET | `/api/events` | Latest Polymarket world-event signals |
+| GET | `/api/chaos` | Global chaos score and level |
 
 ### Example Responses
 
@@ -138,6 +159,17 @@ API runs on `http://localhost:8080`
     "depart_date": "2026-04-27"
   }
 ]
+```
+
+**GET /api/chaos**
+```json
+{
+  "score": 28.7,
+  "level": "MODERATE",
+  "label": "sus but manageable 👀",
+  "insight": "Could be nothing. Could be everything. Check back soon!",
+  "market_count": 9
+}
 ```
 
 **GET /api/events**
@@ -162,14 +194,26 @@ flight-tracker/
 │   ├── api/
 │   │   └── main.go          # REST API server
 │   └── collector/
-│       └── main.go          # Price + event collector
+│       └── main.go          # Price + event collector (runs every 6h on Railway)
 ├── frontend/                # React dashboard (Vite)
 ├── schema.sql               # Database table definitions
-├── .env.example             # Environment variable template
+├── Dockerfile               # API server Docker build
+├── Dockerfile.collector     # Collector Docker build
 ├── go.mod
 ├── go.sum
 └── README.md
 ```
+
+---
+
+## Deployment
+
+| Service | Platform | Notes |
+|---------|----------|-------|
+| Frontend | Vercel | Auto-deploys on push |
+| API server | Railway | Always on |
+| Collector | Railway | Cron job every 6 hours |
+| PostgreSQL | Railway | Persistent |
 
 ---
 

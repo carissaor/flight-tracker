@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"log"
+	"math"
 	"net/http"
 	"os"
 
@@ -25,8 +26,8 @@ type RouteResponse struct {
 }
 
 type PriceHistoryResponse struct {
-	Route       string        `json:"route"`
-	Prices      []PricePoint  `json:"prices"`
+	Route  string       `json:"route"`
+	Prices []PricePoint `json:"prices"`
 }
 
 type PricePoint struct {
@@ -40,6 +41,14 @@ type EventResponse struct {
 	Probability float64 `json:"probability"`
 	Volume      float64 `json:"volume"`
 	FetchedAt   string  `json:"fetched_at"`
+}
+
+type ChaosResponse struct {
+	Score       float64 `json:"score"`
+	Level       string  `json:"level"`
+	Label       string  `json:"label"`
+	Insight     string  `json:"insight"`
+	MarketCount int     `json:"market_count"`
 }
 
 // ---------------------------------------------------------------------------
@@ -197,13 +206,84 @@ func handleEvents(db *sql.DB) http.HandlerFunc {
 	}
 }
 
+// GET /api/chaos
+// Returns a weighted average of all Polymarket event probabilities
+func handleChaos(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Weighted average — higher volume markets count more
+		rows, err := db.Query(`
+			SELECT DISTINCT ON (question)
+				probability, volume
+			FROM events
+			ORDER BY question, fetched_at DESC
+		`)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		defer rows.Close()
+
+		var totalWeight float64
+		var weightedSum float64
+		var count int
+
+		for rows.Next() {
+			var prob, volume float64
+			if err := rows.Scan(&prob, &volume); err != nil {
+				continue
+			}
+			// Use volume as weight, minimum weight of 1 to avoid zero division
+			weight := volume + 1
+			weightedSum += prob * weight
+			totalWeight += weight
+			count++
+		}
+
+		if count == 0 || totalWeight == 0 {
+			writeJSON(w, ChaosResponse{
+				Score:       0,
+				Level:       "UNKNOWN",
+				Label:       "No data yet",
+				Insight:     "Run the collector to start tracking world events.",
+				MarketCount: 0,
+			})
+			return
+		}
+
+		score := (weightedSum / totalWeight) * 100
+
+		level, label, insight := chaosLevel(score)
+
+		writeJSON(w, ChaosResponse{
+			Score:       math.Round(score*10) / 10,
+			Level:       level,
+			Label:       label,
+			Insight:     insight,
+			MarketCount: count,
+		})
+	}
+}
+
+func chaosLevel(score float64) (string, string, string) {
+	switch {
+	case score >= 60:
+		return "EXTREME", "We are so cooked 😭", "Book ASAP and get a refundable ticket!"
+	case score >= 40:
+		return "HIGH", "It's giving chaos 🌪️", "Things are getting spicy...don't wait!"
+	case score >= 20:
+		return "MODERATE", "sus but manageable 👀", "Could be nothing. Could be everything. Check back soon!"
+	default:
+		return "LOW", "Calm Skies ✌️", "Weirdly calm, book before that changes!"
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
 func main() {
 	godotenv.Load()
-	
+
 	db, err := sql.Open("postgres", os.Getenv("DATABASE_URL"))
 	if err != nil {
 		log.Fatal("Error connecting to database:", err)
@@ -218,6 +298,7 @@ func main() {
 	http.HandleFunc("/api/routes", withCORS(handleRoutes(db)))
 	http.HandleFunc("/api/prices", withCORS(handlePrices(db)))
 	http.HandleFunc("/api/events", withCORS(handleEvents(db)))
+	http.HandleFunc("/api/chaos", withCORS(handleChaos(db)))
 
 	port := os.Getenv("PORT")
 	if port == "" {
