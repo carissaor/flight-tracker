@@ -202,10 +202,8 @@ func handleEvents(db *sql.DB) http.HandlerFunc {
 // ---------------------------------------------------------------------------
 
 func main() {
-	if err := godotenv.Load(); err != nil {
-		log.Fatal("Error loading .env file")
-	}
-
+	godotenv.Load()
+	
 	db, err := sql.Open("postgres", os.Getenv("DATABASE_URL"))
 	if err != nil {
 		log.Fatal("Error connecting to database:", err)
