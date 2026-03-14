@@ -12,7 +12,7 @@ import {
 import ChaosScore from "./components/ChaosScore";
 import "./App.css";
 
-const API = "flight-tracker-production-0262.up.railway.app";
+const API = import.meta.env.VITE_API_URL;
 
 const DESTINATION_LABELS = {
   LHR: "London",
