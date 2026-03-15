@@ -46,6 +46,7 @@ type EventResponse struct {
 	Question    string  `json:"question"`
 	Probability float64 `json:"probability"`
 	Volume      float64 `json:"volume"`
+	EndDate     string  `json:"end_date"`
 	FetchedAt   string  `json:"fetched_at"`
 }
 
@@ -239,9 +240,14 @@ func handlePrices(db *sql.DB) http.HandlerFunc {
 // GET /api/events
 func handleEvents(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+
 		rows, err := db.Query(`
 			SELECT DISTINCT ON (question)
-				question, probability, volume, fetched_at
+				question,
+				probability,
+				volume,
+				end_date,
+				fetched_at
 			FROM events
 			ORDER BY question, fetched_at DESC
 		`)
@@ -252,17 +258,38 @@ func handleEvents(db *sql.DB) http.HandlerFunc {
 		defer rows.Close()
 
 		var events []EventResponse
+		now := time.Now()
+
 		for rows.Next() {
 			var e EventResponse
+			var endDate sql.NullTime
 			var fetchedAt sql.NullTime
-			if err := rows.Scan(&e.Question, &e.Probability, &e.Volume, &fetchedAt); err != nil {
+
+			if err := rows.Scan(&e.Question, &e.Probability, &e.Volume, &endDate, &fetchedAt); err != nil {
 				continue
 			}
-			if fetchedAt.Valid {
-				e.FetchedAt = fetchedAt.Time.Format("2006-01-02T15:04:05Z")
+
+			// Skip expired markets
+			if endDate.Valid && endDate.Time.Before(now) {
+				continue
 			}
+
+			// Skip resolved markets
+			if e.Probability <= 0.01 || e.Probability >= 0.99 {
+				continue
+			}
+
+			if endDate.Valid {
+				e.EndDate = endDate.Time.Format(time.RFC3339)
+			}
+
+			if fetchedAt.Valid {
+				e.FetchedAt = fetchedAt.Time.Format(time.RFC3339)
+			}
+
 			events = append(events, e)
 		}
+
 		writeJSON(w, events)
 	}
 }
@@ -270,9 +297,13 @@ func handleEvents(db *sql.DB) http.HandlerFunc {
 // GET /api/chaos
 func handleChaos(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+
 		rows, err := db.Query(`
 			SELECT DISTINCT ON (question)
-				question, probability, volume
+				question,
+				probability,
+				volume,
+				end_date
 			FROM events
 			ORDER BY question, fetched_at DESC
 		`)
@@ -282,35 +313,76 @@ func handleChaos(db *sql.DB) http.HandlerFunc {
 		}
 		defer rows.Close()
 
-		var totalWeight float64
 		var weightedSum float64
+		var totalWeight float64
 		var count int
 
+		now := time.Now()
+
 		for rows.Next() {
+
 			var question string
-			var prob, volume float64
-			if err := rows.Scan(&question, &prob, &volume); err != nil {
+			var prob float64
+			var volume float64
+			var endDate sql.NullTime
+
+			if err := rows.Scan(&question, &prob, &volume, &endDate); err != nil {
 				continue
 			}
+
+			// Ignore expired
+			if endDate.Valid && endDate.Time.Before(now) {
+				continue
+			}
+
+			// Ignore resolved
+			if prob <= 0.01 || prob >= 0.99 {
+				continue
+			}
+
 			signal, typeWeight := adjustedSignal(question, prob)
-			volumeWeight := (volume/100000 + 1) * typeWeight
-			weightedSum += signal * volumeWeight
-			totalWeight += volumeWeight
+
+			// Volume scaling
+			volumeWeight := math.Log10(volume+100) * typeWeight
+
+			// Uncertainty boost (markets near 50% matter most)
+			uncertainty := 1 - math.Abs(prob-0.5)*2
+
+			// Time-to-resolution boost
+			timeWeight := 1.0
+			if endDate.Valid {
+				days := endDate.Time.Sub(now).Hours() / 24
+
+				switch {
+				case days < 7:
+					timeWeight = 2.0
+				case days < 30:
+					timeWeight = 1.5
+				case days < 90:
+					timeWeight = 1.2
+				}
+			}
+
+			eventWeight := volumeWeight * uncertainty * timeWeight
+
+			weightedSum += signal * eventWeight
+			totalWeight += eventWeight
 			count++
 		}
 
-		if count == 0 || totalWeight == 0 {
+		if totalWeight == 0 {
 			writeJSON(w, ChaosResponse{
 				Score:       0,
 				Level:       "UNKNOWN",
 				Label:       "no idea tbh 🤷",
-				Insight:     "Run the collector to start tracking world events.",
+				Insight:     "Run the collector to start tracking events.",
 				MarketCount: 0,
 			})
 			return
 		}
 
-		score := (weightedSum / totalWeight) * 100
+		score := math.Min((weightedSum/totalWeight)*120, 100)
+
 		level, label, insight := chaosLevel(score)
 
 		writeJSON(w, ChaosResponse{
@@ -323,7 +395,7 @@ func handleChaos(db *sql.DB) http.HandlerFunc {
 	}
 }
 
-// GET /api/search?origin=YVR&destination=LHR&month=2026-06
+// GET /api/search
 func handleSearch(db *sql.DB, token string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		origin := r.URL.Query().Get("origin")

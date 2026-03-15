@@ -120,8 +120,8 @@ Frontend runs on `http://localhost:5173`
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/routes` | All routes with latest and lowest price |
-| GET | `/api/prices?route=YVR-LHR` | Price history by departure date |
-| GET | `/api/search?origin=YVR&destination=LHR&month=2026-06` | Search prices for a specific month |
+| GET | `/api/prices` | Price history by departure date |
+| GET | `/api/search` | Search prices for a specific month |
 | GET | `/api/events` | Latest Polymarket world-event signals |
 | GET | `/api/chaos` | Global chaos score and level |
 
