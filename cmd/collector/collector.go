@@ -124,7 +124,11 @@ func savePrices(db *sql.DB, routeID int, entries []PriceEntry) {
 		}
 		_, err := db.Exec(`
 			INSERT INTO prices (route_id, price, currency, depart_date, fetched_at)
-			VALUES ($1, $2, 'USD', $3, NOW())`,
+			VALUES ($1, $2, 'USD', $3, NOW())
+			ON CONFLICT (route_id, depart_date)
+			DO UPDATE SET
+				price = EXCLUDED.price,
+				fetched_at = NOW()`,
 			routeID, e.Price, departDate,
 		)
 		if err != nil {
@@ -217,8 +221,10 @@ func saveEvents(db *sql.DB, markets []PolymarketMarket) {
 // ---------------------------------------------------------------------------
 
 func collect() {
-	godotenv.Load()
-	
+	if err := godotenv.Load(); err != nil {
+		log.Fatal("Error loading .env file")
+	}
+
 	db, err := sql.Open("postgres", os.Getenv("DATABASE_URL"))
 	if err != nil {
 		log.Fatal("Error connecting to database:", err)

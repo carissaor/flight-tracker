@@ -4,6 +4,7 @@ import ChaosScore from "./components/ChaosScore";
 import RouteCard from "./components/RouteCard";
 import PriceChart from "./components/PriceChart";
 import EventsPanel from "./components/EventsPanel";
+import SearchPanel from "./components/SearchPanel";
 import "./App.css";
 
 const API = import.meta.env.VITE_API_URL;
@@ -52,6 +53,12 @@ export default function App() {
             {chaos && (
               <ChaosScore {...chaos} marketCount={chaos.market_count} />
             )}
+
+            <section className="section">
+              <h2 className="section-title">Search Flights</h2>
+              <SearchPanel />
+            </section>
+
             <section className="section">
               <h2 className="section-title">Routes</h2>
               <div className="routes-grid">
