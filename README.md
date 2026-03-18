@@ -1,11 +1,11 @@
-# ✈️ flight-tracker
+# ✈️ Turbulence
 
-I love travelling!! But between global conflicts, pandemics, economic shifts, and geopolitical tensions, flight prices have never been more unpredictable. **flight-tracker** pulls real-time pricing data across multiple routes and world-event signals to build up a dataset for forecasting where prices are headed.
+I love travelling!! But between global conflicts, pandemics, economic shifts, and geopolitical tensions, flight prices have never been more unpredictable. **Turbulence** pulls real-time pricing data across multiple routes and world-event signals to build up a dataset for forecasting where prices are headed.
 
 ![Flight Tracker Dashboard](docs/dashboard.png)
 
 
-🌐 **[Live Demo](https://flight-tracker-pink.vercel.app)**
+🌐 **[Live Demo](https://turbulence-app.vercel.app)**
 
 ---
 
@@ -63,7 +63,7 @@ A single 0–100 score computed from a weighted average of Polymarket event prob
 ### Installation
 
 ```bash
-git clone https://github.com/carissaor/flight-tracker.git
+git clone https://github.com/carissaor/turbulence.git
 cd flight-tracker
 go mod tidy
 ```

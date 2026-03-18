@@ -38,7 +38,7 @@ export default function App() {
     <div className="app">
       <header className="header">
         <div className="header-inner">
-          <div className="logo">✈️ flight-tracker</div>
+          <div className="logo">✈️ Turbulence</div>
           <div className="header-sub">
             YVR departures · live price monitoring
           </div>
