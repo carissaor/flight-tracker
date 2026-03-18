@@ -124,11 +124,7 @@ func savePrices(db *sql.DB, routeID int, entries []PriceEntry) {
 		}
 		_, err := db.Exec(`
 			INSERT INTO prices (route_id, price, currency, depart_date, fetched_at)
-			VALUES ($1, $2, 'USD', $3, NOW())
-			ON CONFLICT (route_id, depart_date)
-			DO UPDATE SET
-				price = EXCLUDED.price,
-				fetched_at = NOW()`,
+			VALUES ($1, $2, 'USD', $3, NOW())`,
 			routeID, e.Price, departDate,
 		)
 		if err != nil {
